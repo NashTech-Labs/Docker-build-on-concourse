@@ -1,0 +1,51 @@
+resources:
+# The repo with our Dockerfile
+- name: docker-ci
+  type: git
+  icon: github
+  check_every: 30s
+  source:
+    uri: https://github.com/official-himanshu/concourse-docker-build.git
+    branch: main
+    paths: ['docker','common']
+
+# Where we will push the image to
+- name: test-docker-image
+  type: docker-image
+  source:
+    repository: ((image-repo-name))/simple-image
+    username: ((registry-username))
+    password: ((docker.registry-password))
+
+jobs:
+- name: build-and-push
+  plan:
+  - get: docker-ci
+    trigger: true
+  - task: copy-source-files
+    config:
+      platform: linux
+      image_resource:
+        type: docker-image
+        source: { repository: alpine }
+      run: 
+        path: sh
+        args:
+        - -exc
+        - |
+          cp docker-ci/docker/Dockerfile docker/Dockerfile
+          cp docker-ci/common/* docker/
+          ./docker/build-args.sh
+      inputs:
+      - name: docker-ci
+      outputs:
+      - name: docker
+    params:
+      ARTIFACTORY_USERNAME: himanshu
+      ARTIFACTORY_PASSWORD: ((docker.registry-password))
+      ARTIFACTORY_URL: new
+  - put: test-docker-image
+    params:
+      build: docker
+      build_args_file: docker/build-args.json
+
